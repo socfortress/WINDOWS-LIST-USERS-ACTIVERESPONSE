@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+  [string]$RunID = "",
   [string]$LogPath = "$env:TEMP\ListWindowsUsers-script.log",
   [string]$ARLog = 'C:\Program Files (x86)\ossec-agent\active-response\active-responses.log'
 )
@@ -36,7 +37,7 @@ function Rotate-Log {
 
 Rotate-Log
 $runStart = Get-Date
-Write-Log "=== SCRIPT START : List Windows Users ==="
+Write-Log "=== SCRIPT START : List Windows Users (RunID: $RunID) ==="
 
 try {
   $allGroups = Get-LocalGroup
@@ -72,18 +73,20 @@ try {
 
   $results = @{
     timestamp = (Get-Date).ToString('o')
+    run_id    = $RunID
     host      = $HostName
     action    = "list_windows_users"
     users     = $userList
   }
 
   $results | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
-  Write-Log "User list JSON appended to $ARLog" 'INFO'
+  Write-Log "User list JSON (RunID: $RunID) appended to $ARLog" 'INFO'
 
 } catch {
   Write-Log $_.Exception.Message 'ERROR'
   $errorObj = [pscustomobject]@{
     timestamp = (Get-Date).ToString('o')
+    run_id    = $RunID
     host      = $HostName
     action    = 'list_windows_users'
     status    = 'error'
@@ -93,5 +96,5 @@ try {
 }
 finally {
   $dur = [int]((Get-Date) - $runStart).TotalSeconds
-  Write-Log "=== SCRIPT END : duration ${dur}s ==="
+  Write-Log "=== SCRIPT END : duration ${dur}s (RunID: $RunID) ==="
 }
