@@ -1,6 +1,5 @@
 [CmdletBinding()]
 param(
-  [string]$RunID = "",
   [string]$LogPath = "$env:TEMP\ListWindowsUsers-script.log",
   [string]$ARLog = 'C:\Program Files (x86)\ossec-agent\active-response\active-responses.log'
 )
@@ -36,8 +35,18 @@ function Rotate-Log {
 }
 
 Rotate-Log
+try {
+  if (Test-Path $ARLog) {
+    Remove-Item -Path $ARLog -Force -ErrorAction Stop
+  }
+  New-Item -Path $ARLog -ItemType File -Force | Out-Null
+  Write-Log "Active response log cleared for fresh run." 'INFO'
+} catch {
+  Write-Log "Failed to clear ${ARLog}: $($_.Exception.Message)" 'WARN'
+}
+
 $runStart = Get-Date
-Write-Log "=== SCRIPT START : List Windows Users (RunID: $RunID) ==="
+Write-Log "=== SCRIPT START : List Windows Users ==="
 
 try {
   $allGroups = Get-LocalGroup
@@ -73,28 +82,26 @@ try {
 
   $results = @{
     timestamp = (Get-Date).ToString('o')
-    run_id    = $RunID
     host      = $HostName
     action    = "list_windows_users"
     users     = $userList
   }
 
-  $results | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
-  Write-Log "User list JSON (RunID: $RunID) appended to $ARLog" 'INFO'
+  $results | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Encoding ascii -Width 2000
+  Write-Log "User list JSON written to ${ARLog}" 'INFO'
 
 } catch {
   Write-Log $_.Exception.Message 'ERROR'
   $errorObj = [pscustomobject]@{
     timestamp = (Get-Date).ToString('o')
-    run_id    = $RunID
     host      = $HostName
     action    = 'list_windows_users'
     status    = 'error'
     error     = $_.Exception.Message
   }
-  $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
+  $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Encoding ascii -Width 2000
 }
 finally {
   $dur = [int]((Get-Date) - $runStart).TotalSeconds
-  Write-Log "=== SCRIPT END : duration ${dur}s (RunID: $RunID) ==="
+  Write-Log "=== SCRIPT END : duration ${dur}s ==="
 }
