@@ -85,6 +85,7 @@ try {
     host      = $HostName
     action    = "list_windows_users"
     users     = $userList
+    copilot_soar = $true
   }
 
   $results | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Encoding ascii -Width 2000
@@ -98,6 +99,7 @@ try {
     action    = 'list_windows_users'
     status    = 'error'
     error     = $_.Exception.Message
+    copilot_soar = $true
   }
   $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Encoding ascii -Width 2000
 }
