@@ -84,8 +84,8 @@ try {
     timestamp = (Get-Date).ToString('o')
     host      = $HostName
     action    = "list_windows_users"
-    users     = $userList
-    copilot_soar = $true
+    results     = $userList
+    copilot_action = $true
   }
 
   $results | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Encoding ascii -Width 2000
@@ -99,7 +99,7 @@ try {
     action    = 'list_windows_users'
     status    = 'error'
     error     = $_.Exception.Message
-    copilot_soar = $true
+    copilot_action = $true
   }
   $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Encoding ascii -Width 2000
 }
@@ -107,3 +107,4 @@ finally {
   $dur = [int]((Get-Date) - $runStart).TotalSeconds
   Write-Log "=== SCRIPT END : duration ${dur}s ==="
 }
+
