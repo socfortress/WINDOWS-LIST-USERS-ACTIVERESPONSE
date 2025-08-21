@@ -52,7 +52,8 @@ try {
   $allGroups = Get-LocalGroup
   $users = Get-LocalUser | Where-Object { $_.Name -match '^\w' }
 
-  $userList = foreach ($u in $users) {
+  $userCount = 0
+  foreach ($u in $users) {
     $uname = $u.Name.Trim()
     $userGroups = @()
 
@@ -65,7 +66,11 @@ try {
       } catch {}
     }
 
-    [PSCustomObject]@{
+    # Create individual user entry
+    $userEntry = [PSCustomObject]@{
+      timestamp          = (Get-Date).ToString('o')
+      host               = $HostName
+      action             = "list_windows_users"
       username           = $uname
       fullname           = $u.FullName
       enabled            = $u.Enabled
@@ -77,19 +82,15 @@ try {
       lastlogon          = if ($u.LastLogon) { $u.LastLogon.ToString("o") } else { $null }
       account_expires    = if ($u.AccountExpires) { $u.AccountExpires.ToString("o") } else { $null }
       groups             = ($userGroups | Sort-Object -Unique) -join ", "
+      copilot_action     = $true
     }
+
+    # Write individual user entry to active response log
+    $userEntry | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
+    $userCount++
   }
 
-  $results = @{
-    timestamp = (Get-Date).ToString('o')
-    host      = $HostName
-    action    = "list_windows_users"
-    results     = $userList
-    copilot_action = $true
-  }
-
-  $results | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Encoding ascii -Width 2000
-  Write-Log "User list JSON written to ${ARLog}" 'INFO'
+  Write-Log "Written $userCount user entries to ${ARLog}" 'INFO'
 
 } catch {
   Write-Log $_.Exception.Message 'ERROR'
@@ -101,10 +102,9 @@ try {
     error     = $_.Exception.Message
     copilot_action = $true
   }
-  $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Encoding ascii -Width 2000
+  $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
 }
 finally {
   $dur = [int]((Get-Date) - $runStart).TotalSeconds
   Write-Log "=== SCRIPT END : duration ${dur}s ==="
 }
-
