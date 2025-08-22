@@ -4,107 +4,104 @@ param(
   [string]$ARLog = 'C:\Program Files (x86)\ossec-agent\active-response\active-responses.log'
 )
 
-$ErrorActionPreference = 'Stop'
-$HostName = $env:COMPUTERNAME
-$LogMaxKB = 100
-$LogKeep = 5
+$ErrorActionPreference='Stop'
+$HostName=$env:COMPUTERNAME
+$LogMaxKB=100
+$LogKeep=5
 
 function Write-Log {
   param([string]$Message,[ValidateSet('INFO','WARN','ERROR','DEBUG')]$Level='INFO')
-  $ts = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss.fff')
-  $line = "[$ts][$Level] $Message"
-  switch ($Level) {
-    'ERROR' { Write-Host $line -ForegroundColor Red }
-    'WARN'  { Write-Host $line -ForegroundColor Yellow }
-    'DEBUG' { if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('Verbose')) { Write-Verbose $line } }
-    default { Write-Host $line }
+  $ts=(Get-Date).ToString('yyyy-MM-dd HH:mm:ss.fff')
+  $line="[$ts][$Level] $Message"
+  switch($Level){
+    'ERROR'{Write-Host $line -ForegroundColor Red}
+    'WARN'{Write-Host $line -ForegroundColor Yellow}
+    'DEBUG'{if($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('Verbose')){Write-Verbose $line}}
+    default{Write-Host $line}
   }
   Add-Content -Path $LogPath -Value $line
 }
 
 function Rotate-Log {
-  if (Test-Path $LogPath -PathType Leaf) {
-    if ((Get-Item $LogPath).Length/1KB -gt $LogMaxKB) {
-      for ($i = $LogKeep - 1; $i -ge 0; $i--) {
-        $old = "$LogPath.$i"; $new = "$LogPath." + ($i + 1)
-        if (Test-Path $old) { Rename-Item $old $new -Force }
+  if(Test-Path $LogPath -PathType Leaf){
+    if((Get-Item $LogPath).Length/1KB -gt $LogMaxKB){
+      for($i=$LogKeep-1;$i -ge 0;$i--){
+        $old="$LogPath.$i";$new="$LogPath."+($i+1)
+        if(Test-Path $old){Rename-Item $old $new -Force}
       }
       Rename-Item $LogPath "$LogPath.1" -Force
     }
   }
 }
 
-Rotate-Log
-try {
-  if (Test-Path $ARLog) {
-    Remove-Item -Path $ARLog -Force -ErrorAction Stop
+function Write-ArNdjson {
+  param([object[]]$Objects,[string]$Dest)
+  $lines=@()
+  foreach($o in $Objects){ $lines += ($o | ConvertTo-Json -Compress -Depth 6) }
+  $payload=[string]::Join("`n",$lines)
+  $tempFile="$env:TEMP\arlog.tmp"
+  Set-Content -Path $tempFile -Value $payload -Encoding ascii -Force
+  try{
+    Move-Item -Path $tempFile -Destination $Dest -Force
+  }catch{
+    Move-Item -Path $tempFile -Destination "$Dest.new" -Force
+    Write-Log "ARLog locked; wrote to $($Dest).new" 'WARN'
   }
-  New-Item -Path $ARLog -ItemType File -Force | Out-Null
-  Write-Log "Active response log cleared for fresh run." 'INFO'
-} catch {
-  Write-Log "Failed to clear ${ARLog}: $($_.Exception.Message)" 'WARN'
 }
 
-$runStart = Get-Date
+Rotate-Log
+$runStart=Get-Date
 Write-Log "=== SCRIPT START : List Windows Users ==="
 
-try {
-  $allGroups = Get-LocalGroup
-  $users = Get-LocalUser | Where-Object { $_.Name -match '^\w' }
+try{
+  $allGroups=Get-LocalGroup
+  $users=Get-LocalUser | Where-Object { $_.Name -match '^\w' }
+  $entries=@()
 
-  $userCount = 0
-  foreach ($u in $users) {
-    $uname = $u.Name.Trim()
-    $userGroups = @()
-
-    foreach ($group in $allGroups) {
-      try {
-        $members = Get-LocalGroupMember -Group $group.Name -ErrorAction Stop
-        if ($members | Where-Object { $_.Name -eq $uname }) {
-          $userGroups += $group.Name
-        }
-      } catch {}
+  foreach($u in $users){
+    $uname=$u.Name.Trim()
+    $userGroups=@()
+    foreach($g in $allGroups){
+      try{
+        $members=Get-LocalGroupMember -Group $g.Name -ErrorAction Stop
+        if($members | Where-Object { $_.Name -eq $uname }){ $userGroups+= $g.Name }
+      }catch{}
     }
-
-    # Create individual user entry
-    $userEntry = [PSCustomObject]@{
-      timestamp          = (Get-Date).ToString('o')
-      host               = $HostName
-      action             = "list_windows_users"
-      username           = $uname
-      fullname           = $u.FullName
-      enabled            = $u.Enabled
-      description        = $u.Description
-      password_required  = $u.PasswordRequired
-      password_changeable= $u.PasswordChangeable
-      password_expired   = $u.PasswordExpired
-      user_may_change_pw = $u.UserMayChangePassword
-      lastlogon          = if ($u.LastLogon) { $u.LastLogon.ToString("o") } else { $null }
-      account_expires    = if ($u.AccountExpires) { $u.AccountExpires.ToString("o") } else { $null }
-      groups             = ($userGroups | Sort-Object -Unique) -join ", "
-      copilot_action     = $true
+    $entries += [pscustomobject]@{
+      timestamp=(Get-Date).ToString('o')
+      host=$HostName
+      action='list_windows_users'
+      username=$uname
+      fullname=$u.FullName
+      enabled=$u.Enabled
+      description=$u.Description
+      password_required=$u.PasswordRequired
+      password_changeable=$u.PasswordChangeable
+      password_expired=$u.PasswordExpired
+      user_may_change_pw=$u.UserMayChangePassword
+      lastlogon=if($u.LastLogon){$u.LastLogon.ToString('o')}else{$null}
+      account_expires=if($u.AccountExpires){$u.AccountExpires.ToString('o')}else{$null}
+      groups=($userGroups | Sort-Object -Unique) -join ', '
+      copilot_action=$true
     }
-
-    # Write individual user entry to active response log
-    $userEntry | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
-    $userCount++
   }
 
-  Write-Log "Written $userCount user entries to ${ARLog}" 'INFO'
-
-} catch {
-  Write-Log $_.Exception.Message 'ERROR'
-  $errorObj = [pscustomobject]@{
-    timestamp = (Get-Date).ToString('o')
-    host      = $HostName
-    action    = 'list_windows_users'
-    status    = 'error'
-    error     = $_.Exception.Message
-    copilot_action = $true
-  }
-  $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
+  Write-ArNdjson -Objects $entries -Dest $ARLog
+  Write-Log "Wrote $($entries.Count) NDJSON records to $ARLog" 'INFO'
 }
-finally {
-  $dur = [int]((Get-Date) - $runStart).TotalSeconds
+catch{
+  Write-Log $_.Exception.Message 'ERROR'
+  $errorObj=[pscustomobject]@{
+    timestamp=(Get-Date).ToString('o')
+    host=$HostName
+    action='list_windows_users'
+    status='error'
+    error=$_.Exception.Message
+    copilot_action=$true
+  }
+  Write-ArNdjson -Objects @($errorObj) -Dest $ARLog
+}
+finally{
+  $dur=[int]((Get-Date)-$runStart).TotalSeconds
   Write-Log "=== SCRIPT END : duration ${dur}s ==="
 }
