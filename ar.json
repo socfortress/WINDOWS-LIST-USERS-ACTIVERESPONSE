@@ -1,0 +1,26 @@
+{
+  "active_response_name": "WINDOWS-LIST-USERS-ACTIVERESPONSE",
+  "description": "Enumerates all local Windows user accounts, including usernames, full names, status (enabled/disabled), password policies, last logon, account expiration, and group memberships. Outputs NDJSON (one record per user) and writes atomically to the Active Response log with .new fallback.",
+  "technology": "Windows",
+  "icon": "windows",
+  "script_parameters": [
+    {
+      "name": "LogPath",
+      "type": "string",
+      "required": false,
+      "description": "Path to the rotating human-readable script log.",
+      "default": "%TEMP%/ListWindowsUsers-script.log"
+    },
+    {
+      "name": "ARLog",
+      "type": "string",
+      "required": false,
+      "description": "Active Response NDJSON output path (atomic overwrite; falls back to .new if locked).",
+      "default": "C:\\Program Files (x86)\\ossec-agent\\active-response\\active-responses.log"
+    }
+  ],
+  "repo_url": "https://github.com/socfortress/WINDOWS-LIST-USERS-ACTIVERESPONSE",
+  "script_name": "List-Windows-Users.ps1",
+  "version": "1.0.0",
+  "last_updated": "2025-08-22T00:00:00Z"
+}
