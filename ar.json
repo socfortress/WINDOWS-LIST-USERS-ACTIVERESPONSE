@@ -1,5 +1,5 @@
 {
-  "active_response_name": "WINDOWS-LIST-USERS-ACTIVERESPONSE",
+  "copilot_action_name": "WINDOWS-LIST-USERS-ACTIVERESPONSE",
   "description": "Enumerates all local Windows user accounts, including usernames, full names, status (enabled/disabled), password policies, last logon, account expiration, and group memberships. Outputs NDJSON (one record per user) and writes atomically to the Active Response log with .new fallback.",
   "technology": "Windows",
   "icon": "windows",
